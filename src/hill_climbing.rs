@@ -1,7 +1,9 @@
 use std::sync::{Arc, Mutex};
 use std::thread;
 use crate::{Item, Search};
-use rand::Rng;
+use rand::prelude::*;
+use rand_chacha::ChaCha8Rng;
+use rand::seq::SliceRandom;
 
 pub struct HillClimbing {}
 
@@ -16,7 +18,7 @@ impl HillClimbing {
         max_capacity: usize
     ) -> Result<thread::JoinHandle<()>, ()> {
         Ok(thread::spawn(move || {
-            let mut rng = rand::thread_rng();
+            let mut rng = ChaCha8Rng::seed_from_u64(101);
 
             for _ in 0..iterations {
                 let knapsack_cpy = HillClimbing::copy_knapsack(&knapsack.lock().unwrap());
@@ -24,17 +26,13 @@ impl HillClimbing {
                 let _ = new_knapsack.remove(rng.gen_range(0..new_knapsack.len()));
 
                 let mut item_ids: Vec<usize> = (0..items.len()).collect();
+                item_ids.shuffle(&mut rng);
 
-                loop  {
-                    let item_id = item_ids.remove(rng.gen_range(0..item_ids.len()));
+                for item_id in item_ids  {
                     let item = items.get(item_id).unwrap();
 
                     if new_knapsack.contains(&item) == false && HillClimbing::volume(&new_knapsack) + item.volume <= max_capacity {
                         new_knapsack.push(item.clone());
-                    }
-
-                    if item_ids.len() == 0 {
-                        break;
                     }
                 }
 

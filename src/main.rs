@@ -2,11 +2,13 @@ use std::{thread, time};
 use std::sync::{Arc, Mutex};
 use hill_climbing::HillClimbing;
 use sa::SA;
-use rand::Rng;
+use rand::prelude::*;
+use rand_chacha::ChaCha8Rng;
+use writter::Writter;
 
 mod hill_climbing;
 mod sa;
-
+mod writter;
 
 #[derive(Clone)]
 pub struct Item {
@@ -65,8 +67,7 @@ pub trait Search {
     }
 }
 
-fn generate_random_item(id: usize) -> Item {
-    let mut rng = rand::thread_rng();
+fn generate_random_item(id: usize, rng: &mut impl Rng) -> Item {
     let value = rng.gen_range(17..=23);
     let volume = rng.gen_range(11..=17);
     Item { id, value, volume }
@@ -76,9 +77,10 @@ fn main() {
     const MAX_CAPACITY: usize = 400;
     const ITERATIONS: usize = 600000;
     let mut items = Vec::new();
+    let mut rng = Box::new(ChaCha8Rng::seed_from_u64(100));
 
     for i in 0..140 {
-        let item = generate_random_item(i);
+        let item = generate_random_item(i, &mut rng);
         items.push(item);
     }
     let items = Arc::new(items);
@@ -91,6 +93,7 @@ fn main() {
     }
 
     println!("Initial value: {} capacity: {}\n\n", HillClimbing::value(&knapsack), HillClimbing::volume(&knapsack));
+    let (writter, writter_thread) = Writter::run();
 
     let hc_knapsack = Arc::new(Mutex::new(knapsack.clone()));
     let hc_iteration_counter = Arc::new(Mutex::new(0));
@@ -98,24 +101,28 @@ fn main() {
 
     let sa_knapsack = Arc::new(Mutex::new(knapsack.clone()));
     let sa_iteration_counter = Arc::new(Mutex::new(0));
-    let sa_join = SA::run(ITERATIONS, sa_iteration_counter.clone(), items.clone(), sa_knapsack.clone(), MAX_CAPACITY, 100).unwrap();
+    let sa_join = SA::run(writter, ITERATIONS, sa_iteration_counter.clone(), items.clone(), sa_knapsack.clone(), MAX_CAPACITY, 80).unwrap();
 
     while hill_climbing_join.is_finished() == false || sa_join.is_finished() == false {
-        thread::sleep(time::Duration::from_millis(100));
-        let hc_knapsack = hc_knapsack.lock().unwrap();
-        println!(
-            "\x1b[2FHC iteration: {} Current best: {} Capacity: {}                 ",
-            hc_iteration_counter.lock().unwrap(),
-            HillClimbing::value(&hc_knapsack),
-            HillClimbing::volume(&hc_knapsack)
-        );
-        let sa_knapsack = sa_knapsack.lock().unwrap();
-        println!(
-            "FS iteration: {} Current best: {} Capacity: {}                 ",
-            sa_iteration_counter.lock().unwrap(),
-            SA::value(&sa_knapsack),
-            SA::volume(&sa_knapsack)
-        );
+        thread::sleep(time::Duration::from_millis(200));
+        {
+            let hc_knapsack = hc_knapsack.lock().unwrap();
+            println!(
+                "\x1b[2FHC iteration: {} Current best: {} Capacity: {}                 ",
+                hc_iteration_counter.lock().unwrap(),
+                HillClimbing::value(&hc_knapsack),
+                HillClimbing::volume(&hc_knapsack)
+            );
+        }
+        {
+            let sa_knapsack = sa_knapsack.lock().unwrap();
+            println!(
+                "FS iteration: {} Current best: {} Capacity: {}                 ",
+                sa_iteration_counter.lock().unwrap(),
+                SA::value(&sa_knapsack),
+                SA::volume(&sa_knapsack)
+            );
+        }
     }
-
+    let _ = writter_thread.join();
 }
