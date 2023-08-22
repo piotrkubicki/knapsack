@@ -3,12 +3,13 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::mpsc::{Sender, channel, Receiver};
 use std::thread::{self, JoinHandle};
+use crate::Writter;
 
-pub struct Writter {
+pub struct CsvWritter {
     tx: Sender<Vec<String>>,
 }
 
-impl Writter {
+impl CsvWritter {
 
     fn open_file(filename: &str) -> File {
         let f: File;
@@ -22,13 +23,6 @@ impl Writter {
         f
     }
 
-    pub fn register(&self, filename: &str, headers: Vec<&str>) -> Sender<Vec<String>> {
-        let mut f = Writter::open_file(filename);
-        let _  = writeln!(&mut f, "{}", headers.join(", "));
-
-        self.tx.clone()
-    }
-
     pub fn run() -> (Self, JoinHandle<()>) {
         let (tx, rx): (Sender<Vec<String>>, Receiver<Vec<String>>) = channel();
 
@@ -36,7 +30,7 @@ impl Writter {
             loop {
                 if let Ok(mut msg) = rx.recv() {
                     let filename = msg.remove(0);
-                    let mut f = Writter::open_file(&filename);
+                    let mut f = Self::open_file(&filename);
 
                     let _ = writeln!(&mut f, "{}", msg.join(", "));
                 } else {
@@ -45,6 +39,12 @@ impl Writter {
             }
         });
 
-        (Writter{ tx }, handle)
+        (Self{ tx }, handle)
+    }
+}
+
+impl Writter for CsvWritter {
+    fn write(&self, data: Vec<String>) {
+        let _ = self.tx.send(data);
     }
 }

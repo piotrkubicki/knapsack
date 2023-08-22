@@ -4,11 +4,11 @@ use hill_climbing::HillClimbing;
 use sa::SA;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
-use writter::Writter;
+use csv_writter::CsvWritter;
 
 mod hill_climbing;
 mod sa;
-mod writter;
+mod csv_writter;
 
 #[derive(Clone)]
 pub struct Item {
@@ -21,6 +21,10 @@ impl PartialEq for Item {
     fn eq(&self, other: &Item) -> bool {
         self.id == other.id
     }
+}
+
+pub trait Writter {
+    fn write(&self, data: Vec<String>);
 }
 
 pub trait Search {
@@ -93,7 +97,8 @@ fn main() {
     }
 
     println!("Initial value: {} capacity: {}\n\n", HillClimbing::value(&knapsack), HillClimbing::volume(&knapsack));
-    let (writter, writter_thread) = Writter::run();
+    let (writter, writter_thread) = CsvWritter::run();
+    let writter = Box::new(writter) as Box<dyn Writter + Send>;
 
     let hc_knapsack = Arc::new(Mutex::new(knapsack.clone()));
     let hc_iteration_counter = Arc::new(Mutex::new(0));

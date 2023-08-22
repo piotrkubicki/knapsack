@@ -5,7 +5,7 @@ use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 use rand::seq::SliceRandom;
 use libm::exp;
-use crate::writter::Writter;
+use crate::Writter;
 use chrono::prelude::*;
 
 pub struct SA {}
@@ -14,7 +14,7 @@ impl Search for SA {}
 
 impl SA {
     pub fn run(
-        writter: Writter,
+        writter: Box<dyn Writter + Send>,
         iterations: usize,
         iteration_counter: Arc<Mutex<usize>>,
         items: Arc<Vec<Item>>,
@@ -23,7 +23,15 @@ impl SA {
         temperature: usize
     ) -> Result<thread::JoinHandle<()>, ()> {
         let filename = format!("{}_{}_{}_{}.csv", "sa", iterations, temperature, Utc::now().timestamp());
-        let tx = writter.register(&filename, vec!["id", "iteration", "temperature", "weight", "value"]);
+        let data = vec![
+            filename.clone(),
+            "id".to_string(),
+            "iteration".to_string(),
+            "temperature".to_string(),
+            "weight".to_string(),
+            "value".to_string()
+        ];
+        writter.write(data);
         Ok(thread::spawn(move || {
             let mut rng = ChaCha8Rng::seed_from_u64(100);
 
@@ -49,7 +57,6 @@ impl SA {
                 let vol_w = new_ks_vol as isize - (SA::volume(&knapsack_cpy)) as isize;
                 let val_w = SA::value(&knapsack_cpy) as isize - SA::value(&new_knapsack) as isize;
                 let diff = val_w + (vol_w / 100);
-//                let diff = val_w;
                 let m = exp(-(diff.abs() as f64) / temp);
 
                 if new_ks_vol <= max_capacity {
@@ -68,19 +75,18 @@ impl SA {
                     let data: Vec<String>;
                     {
                         data = vec![
-                            filename.clone().to_string(),
+                            filename.clone(),
                             "SA".to_string(),
-                            iteration_counter.clone().to_string(),
-                            temp.clone().to_string(),
-                            m.clone().to_string(),
+                            iteration_counter.to_string(),
+                            temp.to_string(),
+                            m.to_string(),
                             SA::value(&knapsack.lock().unwrap()).to_string()
                         ];
                     }
-                    let _ = tx.send(data);
+                    let _ = writter.write(data);
                 }
                 *iteration_counter += 1;
             }
-            drop(tx);
         }))
     }
 }
